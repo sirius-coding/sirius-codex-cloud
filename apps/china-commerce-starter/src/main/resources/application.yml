@@ -1,0 +1,24 @@
+spring:
+  application:
+    name: china-commerce-starter
+  datasource:
+    url: jdbc:mysql://localhost:3306/china_commerce?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+    username: root
+    password: root
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
+server:
+  port: 8080
+
+# 生产环境建议：
+# 1. 使用 KMS/环境变量管理数据库与支付密钥
+# 2. 接入支付宝与微信官方 SDK 做签名验签
+# 3. 对订单与支付接口启用幂等键和限流
