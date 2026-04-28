@@ -1,65 +1,59 @@
-# API 文档（简版）
+# API 文档（默认模板）
 
-## 通用说明
+## 基础信息
 
 - Base URL: `http://localhost:8000`
-- 受保护接口需要 Header：
+- 鉴权方式：`Authorization: Bearer <API_TOKEN>`
+- 业务 API 前缀：`/api/v1`
 
-```http
-Authorization: Bearer <API_TOKEN>
-```
+## 健康检查
 
-## 1. 健康检查
+### `GET /health/live`
+用于容器存活探针（liveness）。
 
-### GET /health
+### `GET /health/ready`
+用于依赖可用性探针（readiness，含数据库检查）。
 
-无需鉴权。
+## 客户接口
 
-响应：
-
-```json
-{"status": "ok"}
-```
-
-## 2. 创建客户
-
-### POST /api/clients
+### 创建客户
+`POST /api/v1/clients`
 
 请求体：
 
 ```json
 {
-  "name": "某某餐饮",
+  "name": "某某科技",
   "contact": "王总 138xxxx",
-  "notes": "重点客户"
+  "notes": "老客户"
 }
 ```
 
-## 3. 查询客户列表
+### 客户列表
+`GET /api/v1/clients?limit=50&offset=0`
 
-### GET /api/clients
+## 项目接口
 
-返回客户数组。
-
-## 4. 创建项目
-
-### POST /api/projects
+### 创建项目
+`POST /api/v1/projects`
 
 请求体：
 
 ```json
 {
   "client_id": 1,
-  "title": "门店预约小程序后端",
-  "status": "in_progress",
-  "budget": 18000,
-  "deadline": "2026-06-30"
+  "title": "官网改版",
+  "status": "doing",
+  "budget": 20000,
+  "deadline": "2026-12-31"
 }
 ```
 
-## 5. 查询项目列表
+### 项目列表
+`GET /api/v1/projects?limit=50&offset=0`
 
-### GET /api/projects
+## 在线文档
 
-返回项目数组。
-
+启动后访问：
+- Swagger UI: `/docs`
+- ReDoc: `/redoc`

@@ -3,17 +3,27 @@
 ## 1. 设计原则
 
 1. **最小可交付**：先满足私活上线，再逐步扩展。
-2. **低运维成本**：单容器 + SQLite 默认可跑通。
+2. **低运维成本**：单服务即可跑通，默认 SQLite。
 3. **可平滑升级**：后续替换 PostgreSQL / Redis 不影响主体结构。
+4. **Monorepo-ready**：仓库支持持续增加新项目。
 
 ## 2. 当前架构
 
-- `FastAPI` 提供 REST API。
-- `SQLAlchemy` 负责 ORM 与持久化。
-- `SQLite` 默认存储到 `backend/data/freelance.db`。
-- `docker-compose` 负责构建与启动。
+- `apps/freelance-api`：核心业务 API（FastAPI + SQLAlchemy）。
+- `SQLite` 默认存储到 `apps/freelance-api/data/freelance.db`。
+- `docker-compose` 负责聚合编排。
+- `docs/` 维护统一项目文档。
 
-## 3. 领域模型（默认）
+## 3. 生产级能力（模板默认）
+
+- 健康检查：`/health/live`、`/health/ready`。
+- 鉴权：`Authorization: Bearer <API_TOKEN>`。
+- 数据库可用性探针：readiness 会执行 DB ping。
+- CORS 配置：支持通过环境变量统一配置。
+- 容器安全：应用以非 root 用户运行。
+- API 版本化：默认前缀 `/api/v1`。
+
+## 4. 领域模型（默认）
 
 ### Client（客户）
 - name
@@ -29,21 +39,11 @@
 
 > 一个 Client 下可以有多个 Project。
 
-## 4. 鉴权策略
+## 5. 多项目扩展建议
 
-为了便于私活快速落地，模板采用 **静态 Token**：
-- Header: `Authorization: Bearer <API_TOKEN>`
-- 适用于 MVP 或内网系统。
-
-生产建议升级为：
-- JWT + 用户系统
-- RBAC（角色权限）
-- API 网关限流
-
-## 5. 扩展建议
-
-- 增加 `Invoice`（开票）模型。
-- 增加 `Task`（任务）模型。
-- 增加 `Worklog`（工时）模型。
-- 增加 Webhook 与消息通知（邮件/企业微信/飞书）。
-
+- 在 `apps/` 中新增项目目录：
+  - `apps/admin-web`（管理端前端）
+  - `apps/report-worker`（异步报表任务）
+  - `apps/integration-gateway`（第三方集成层）
+- 根 `docker-compose.yml` 统一编排。
+- 公共规范放在根目录文档；各项目内部实现独立演进。
