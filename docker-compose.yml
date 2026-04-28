@@ -82,6 +82,126 @@ services:
     profiles:
       - backup
 
+  crm-api:
+    build:
+      context: ./apps/crm-api
+    container_name: freelance-template-crm-api
+    ports:
+      - "8021:8021"
+    volumes:
+      - ./apps/crm-api/data:/app/data
+    restart: unless-stopped
+    profiles:
+      - crm
+
+  invoice-service:
+    build:
+      context: ./apps/invoice-service
+    container_name: freelance-template-invoice-service
+    ports:
+      - "8022:8022"
+    volumes:
+      - ./apps/invoice-service/data:/app/data
+    restart: unless-stopped
+    profiles:
+      - invoice
+
+  helpdesk-api:
+    build:
+      context: ./apps/helpdesk-api
+    container_name: freelance-template-helpdesk-api
+    ports:
+      - "8023:8023"
+    volumes:
+      - ./apps/helpdesk-api/data:/app/data
+    restart: unless-stopped
+    profiles:
+      - helpdesk
+
+  inventory-api:
+    build:
+      context: ./apps/inventory-api
+    container_name: freelance-template-inventory-api
+    ports:
+      - "8024:8024"
+    volumes:
+      - ./apps/inventory-api/data:/app/data
+    restart: unless-stopped
+    profiles:
+      - inventory
+
+  subscription-billing-api:
+    build:
+      context: ./apps/subscription-billing-api
+    container_name: freelance-template-subscription-billing-api
+    ports:
+      - "8025:8025"
+    volumes:
+      - ./apps/subscription-billing-api/data:/app/data
+    restart: unless-stopped
+    profiles:
+      - billing
+
+  notification-hub:
+    build:
+      context: ./apps/notification-hub
+    container_name: freelance-template-notification-hub
+    ports:
+      - "8026:8026"
+    volumes:
+      - ./apps/notification-hub/data:/app/data
+    restart: unless-stopped
+    profiles:
+      - notification
+
+  contract-lifecycle-api:
+    build:
+      context: ./apps/contract-lifecycle-api
+    container_name: freelance-template-contract-lifecycle-api
+    ports:
+      - "8027:8027"
+    volumes:
+      - ./apps/contract-lifecycle-api/data:/app/data
+    restart: unless-stopped
+    profiles:
+      - contract
+
+  timesheet-api:
+    build:
+      context: ./apps/timesheet-api
+    container_name: freelance-template-timesheet-api
+    ports:
+      - "8028:8028"
+    volumes:
+      - ./apps/timesheet-api/data:/app/data
+    restart: unless-stopped
+    profiles:
+      - timesheet
+
+  lead-scoring-api:
+    build:
+      context: ./apps/lead-scoring-api
+    container_name: freelance-template-lead-scoring-api
+    ports:
+      - "8029:8029"
+    volumes:
+      - ./apps/lead-scoring-api/data:/app/data
+    restart: unless-stopped
+    profiles:
+      - lead
+
+  knowledge-base-api:
+    build:
+      context: ./apps/knowledge-base-api
+    container_name: freelance-template-knowledge-base-api
+    ports:
+      - "8030:8030"
+    volumes:
+      - ./apps/knowledge-base-api/data:/app/data
+    restart: unless-stopped
+    profiles:
+      - knowledge
+
   docs:
     image: squidfunk/mkdocs-material:9
     container_name: freelance-template-docs

@@ -9,6 +9,16 @@
 - `booking-api`：预约/排期管理 API（冲突检测 + 状态流转）
 - `expense-tracker`：自由职业者支出管理 CLI（流水 + 月报）
 - `file-backup-worker`：增量备份 Worker（哈希去重 + 保留策略）
+- `crm-api`：CRM 客户档案 API（客户信息 + 负责人 + 状态）
+- `invoice-service`：发票管理 API（开票 + 跟踪 + 状态）
+- `helpdesk-api`：售后工单 API（优先级 + 生命周期）
+- `inventory-api`：库存管理 API（库存条目 + 预警）
+- `subscription-billing-api`：订阅计费 API（订阅记录 + 状态）
+- `notification-hub`：通知任务 API（消息队列前置落库）
+- `contract-lifecycle-api`：合同管理 API（金额 + 起止日期 + 状态）
+- `timesheet-api`：工时记录 API（工时项 + 负责人 + 状态）
+- `lead-scoring-api`：销售线索 API（线索评分与阶段）
+- `knowledge-base-api`：知识库 API（文档条目 + 发布状态）
 
 这些项目都可以直接作为外包交付的起点，或作为你自己的工具链组件。
 
@@ -58,6 +68,9 @@ docker compose --profile expense up --build expense-tracker
 
 # 文件备份 Worker（展示帮助）
 docker compose --profile backup up --build file-backup-worker
+
+# 新增接单项目（示例：CRM）
+docker compose --profile crm up --build crm-api
 ```
 
 ### 4) API 访问示例
@@ -89,7 +102,17 @@ docker compose --profile docs up docs
 │   ├── web-crawler/
 │   ├── booking-api/
 │   ├── expense-tracker/
-│   └── file-backup-worker/
+│   ├── file-backup-worker/
+│   ├── crm-api/
+│   ├── invoice-service/
+│   ├── helpdesk-api/
+│   ├── inventory-api/
+│   ├── subscription-billing-api/
+│   ├── notification-hub/
+│   ├── contract-lifecycle-api/
+│   ├── timesheet-api/
+│   ├── lead-scoring-api/
+│   └── knowledge-base-api/
 ├── docs/
 ├── scripts/
 ├── .env.example
