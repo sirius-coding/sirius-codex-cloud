@@ -44,6 +44,44 @@ services:
     profiles:
       - crawler
 
+  booking-api:
+    build:
+      context: ./apps/booking-api
+    container_name: freelance-template-booking-api
+    ports:
+      - "8010:8010"
+    volumes:
+      - ./apps/booking-api/data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8010/health/live"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    profiles:
+      - booking
+
+  expense-tracker:
+    build:
+      context: ./apps/expense-tracker
+    container_name: freelance-template-expense-tracker
+    volumes:
+      - ./apps/expense-tracker/data:/app/data
+    command: ["python", "main.py", "--help"]
+    profiles:
+      - expense
+
+  file-backup-worker:
+    build:
+      context: ./apps/file-backup-worker
+    container_name: freelance-template-file-backup-worker
+    volumes:
+      - ./apps/file-backup-worker/data:/app/data
+    command: ["python", "main.py", "--help"]
+    profiles:
+      - backup
+
   docs:
     image: squidfunk/mkdocs-material:9
     container_name: freelance-template-docs

@@ -1,16 +1,16 @@
 # 程序员私活项目模板（Freelance Starter）
 
-这是一个面向 **程序员接私活** 的生产级模板仓库，默认包含：
-- 一个可直接上线的 `freelance-api` 项目
-- 一个可独立运行的 `web-crawler` 爬虫项目  
-并且仓库结构已调整为 **可扩展多项目（Monorepo-ready）**。
+这是一个面向 **程序员接私活** 的生产级模板仓库，默认包含多个可独立交付的中型项目，并且仓库结构已调整为 **可扩展多项目（Monorepo-ready）**。
 
-你可以把它当作一个“起步盘”，快速扩展为：
-- 外包项目管理系统
-- 小型 CRM
-- 工单/需求跟踪系统
-- 预约/服务交付后台
-- 后续新增 Web、管理后台、任务服务等独立项目
+## 当前内置项目
+
+- `freelance-api`：客户与项目管理 API（FastAPI）
+- `web-crawler`：可配置的通用爬虫任务
+- `booking-api`：预约/排期管理 API（冲突检测 + 状态流转）
+- `expense-tracker`：自由职业者支出管理 CLI（流水 + 月报）
+- `file-backup-worker`：增量备份 Worker（哈希去重 + 保留策略）
+
+这些项目都可以直接作为外包交付的起点，或作为你自己的工具链组件。
 
 ## 核心目标
 
@@ -22,9 +22,7 @@
 ## 技术栈
 
 - Python 3.12
-- FastAPI
-- SQLAlchemy
-- SQLite（默认，可替换 PostgreSQL）
+- FastAPI / SQLModel / SQLite
 - Docker / Docker Compose
 - MkDocs（可选：文档站点）
 
@@ -38,33 +36,34 @@ cp .env.example .env
 
 > 请修改 `.env` 里的 `API_TOKEN`，用于接口鉴权。
 
-### 2) 启动项目
+### 2) 启动核心项目
 
 ```bash
 docker compose up -d --build
 ```
 
-### 3) 访问服务
+默认启动 `freelance-api`。
 
-- API 根地址: http://localhost:8000
-- 健康检查（liveness）: http://localhost:8000/health/live
-- 健康检查（readiness）: http://localhost:8000/health/ready
-- Swagger 文档: http://localhost:8000/docs
-
-### 5) 启动爬虫项目（可选）
+### 3) 按需启动其他项目
 
 ```bash
+# 爬虫
 docker compose --profile crawler up --build web-crawler
+
+# 预约 API
+docker compose --profile booking up --build booking-api
+
+# 支出管理 CLI（展示帮助）
+docker compose --profile expense up --build expense-tracker
+
+# 文件备份 Worker（展示帮助）
+docker compose --profile backup up --build file-backup-worker
 ```
 
-> 爬虫参数可在 `.env` 中配置：`CRAWLER_URL`、`CRAWLER_MAX_PAGES`、`CRAWLER_INTERVAL_SECONDS`。
+### 4) API 访问示例
 
-### 4) 调用受保护接口示例
-
-```bash
-curl -X GET 'http://localhost:8000/api/v1/clients' \
-  -H 'Authorization: Bearer replace-with-your-token'
-```
+- Freelance API 根地址: http://localhost:8000
+- Booking API 根地址: http://localhost:8010
 
 ## 文档目录
 
@@ -86,21 +85,11 @@ docker compose --profile docs up docs
 ```text
 .
 ├── apps/
-│   └── freelance-api/
-│       ├── app/
-│       │   ├── routes/
-│       │   ├── config.py
-│       │   ├── db.py
-│       │   ├── main.py
-│       │   ├── models.py
-│       │   └── schemas.py
-│       ├── Dockerfile
-│       └── requirements.txt
-│   └── web-crawler/
-│       ├── Dockerfile
-│       ├── README.md
-│       ├── main.py
-│       └── requirements.txt
+│   ├── freelance-api/
+│   ├── web-crawler/
+│   ├── booking-api/
+│   ├── expense-tracker/
+│   └── file-backup-worker/
 ├── docs/
 ├── scripts/
 ├── .env.example
@@ -111,6 +100,6 @@ docker compose --profile docs up docs
 
 ## 后续新增项目建议
 
-- 在 `apps/` 下新增独立目录，例如：`apps/admin-web`、`apps/report-worker`。
+- 在 `apps/` 下继续新增独立目录，例如：`apps/admin-web`、`apps/report-worker`。
 - 每个项目独立维护其启动方式、Dockerfile、依赖与 README。
 - 通过根目录 `docker-compose.yml` 聚合编排。
