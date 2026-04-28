@@ -28,8 +28,11 @@
 
 ## 代码位置建议
 
-- 数据模型：`backend/app/models.py`
-- 请求/响应：`backend/app/schemas.py`
-- 路由层：`backend/app/routes/`
-- 配置层：`backend/app/config.py`
+- 数据模型：`apps/freelance-api/app/models.py`
+- 请求/响应：`apps/freelance-api/app/schemas.py`
+- 路由层：`apps/freelance-api/app/routes/`
+- 配置层：`apps/freelance-api/app/config.py`
 
+## 多项目扩展建议
+
+如果后续要新增第二个项目（如前端或 worker），直接在 `apps/` 新建目录并独立维护，不要耦合到 `freelance-api` 内。

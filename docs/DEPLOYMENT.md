@@ -15,6 +15,7 @@ cp .env.example .env
 
 - `API_TOKEN`
 - `PORT`
+- `DATABASE_URL`（生产建议 PostgreSQL）
 
 ## 3. 启动
 
@@ -31,7 +32,7 @@ docker compose ps
 ## 5. 查看日志
 
 ```bash
-docker compose logs -f app
+docker compose logs -f freelance-api
 ```
 
 ## 6. 停止服务
@@ -46,4 +47,4 @@ docker compose down
 - 将 SQLite 替换为 PostgreSQL。
 - 增加反向代理（Nginx / Caddy）和 HTTPS。
 - 增加自动备份策略。
-
+- 按环境拆分 compose 文件（如 `docker-compose.prod.yml`）。
