@@ -19,6 +19,31 @@ services:
       retries: 3
       start_period: 10s
 
+  web-crawler:
+    build:
+      context: ./apps/web-crawler
+    container_name: freelance-template-crawler
+    env_file:
+      - .env
+    environment:
+      CRAWLER_URL: ${CRAWLER_URL:-https://example.com}
+      CRAWLER_MAX_PAGES: ${CRAWLER_MAX_PAGES:-10}
+      CRAWLER_INTERVAL_SECONDS: ${CRAWLER_INTERVAL_SECONDS:-0}
+    command:
+      [
+        "python",
+        "main.py",
+        "--url",
+        "${CRAWLER_URL:-https://example.com}",
+        "--max-pages",
+        "${CRAWLER_MAX_PAGES:-10}",
+        "--interval-seconds",
+        "${CRAWLER_INTERVAL_SECONDS:-0}"
+      ]
+    restart: unless-stopped
+    profiles:
+      - crawler
+
   docs:
     image: squidfunk/mkdocs-material:9
     container_name: freelance-template-docs

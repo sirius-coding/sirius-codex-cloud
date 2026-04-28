@@ -1,6 +1,9 @@
 # 程序员私活项目模板（Freelance Starter）
 
-这是一个面向 **程序员接私活** 的生产级模板仓库，默认包含一个可直接上线的 `freelance-api` 项目，且仓库结构已调整为 **可扩展多项目（Monorepo-ready）**。
+这是一个面向 **程序员接私活** 的生产级模板仓库，默认包含：
+- 一个可直接上线的 `freelance-api` 项目
+- 一个可独立运行的 `web-crawler` 爬虫项目  
+并且仓库结构已调整为 **可扩展多项目（Monorepo-ready）**。
 
 你可以把它当作一个“起步盘”，快速扩展为：
 - 外包项目管理系统
@@ -48,6 +51,14 @@ docker compose up -d --build
 - 健康检查（readiness）: http://localhost:8000/health/ready
 - Swagger 文档: http://localhost:8000/docs
 
+### 5) 启动爬虫项目（可选）
+
+```bash
+docker compose --profile crawler up --build web-crawler
+```
+
+> 爬虫参数可在 `.env` 中配置：`CRAWLER_URL`、`CRAWLER_MAX_PAGES`、`CRAWLER_INTERVAL_SECONDS`。
+
 ### 4) 调用受保护接口示例
 
 ```bash
@@ -85,6 +96,11 @@ docker compose --profile docs up docs
 │       │   └── schemas.py
 │       ├── Dockerfile
 │       └── requirements.txt
+│   └── web-crawler/
+│       ├── Dockerfile
+│       ├── README.md
+│       ├── main.py
+│       └── requirements.txt
 ├── docs/
 ├── scripts/
 ├── .env.example
@@ -98,4 +114,3 @@ docker compose --profile docs up docs
 - 在 `apps/` 下新增独立目录，例如：`apps/admin-web`、`apps/report-worker`。
 - 每个项目独立维护其启动方式、Dockerfile、依赖与 README。
 - 通过根目录 `docker-compose.yml` 聚合编排。
-
