@@ -4,9 +4,10 @@ import argparse
 import sqlite3
 from dataclasses import dataclass
 from datetime import datetime
+import os
 from pathlib import Path
 
-DB_PATH = Path("data/expenses.db")
+DB_PATH = Path(os.getenv("EXPENSE_DB_PATH", "data/expenses.db"))
 
 
 @dataclass
@@ -37,6 +38,9 @@ def get_conn() -> sqlite3.Connection:
 
 
 def add_expense(expense: Expense) -> None:
+    if expense.amount <= 0:
+        raise ValueError("amount 必须大于 0")
+    datetime.strptime(expense.spent_at, "%Y-%m-%d")
     with get_conn() as conn:
         conn.execute(
             """
@@ -49,6 +53,8 @@ def add_expense(expense: Expense) -> None:
 
 
 def list_expenses(limit: int) -> None:
+    if limit <= 0:
+        raise ValueError("limit 必须大于 0")
     with get_conn() as conn:
         cursor = conn.execute(
             """
@@ -70,6 +76,7 @@ def list_expenses(limit: int) -> None:
 
 
 def monthly_report(month: str) -> None:
+    datetime.strptime(f"{month}-01", "%Y-%m-%d")
     with get_conn() as conn:
         cursor = conn.execute(
             """

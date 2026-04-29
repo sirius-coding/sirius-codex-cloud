@@ -1,12 +1,35 @@
 from __future__ import annotations
 
+import os
+from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from typing import Generator
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy import text
 from sqlmodel import Field as SQLField, Session, SQLModel, create_engine, select
+
+
+@dataclass(frozen=True)
+class Settings:
+    app_name: str
+    api_prefix: str
+    api_token: str
+    database_url: str
+
+
+def get_settings() -> Settings:
+    return Settings(
+        app_name=os.getenv("APP_NAME", "Inventory API"),
+        api_prefix=os.getenv("API_PREFIX", "/api/v1"),
+        api_token=os.getenv("API_TOKEN", "dev-token"),
+        database_url=os.getenv("DATABASE_URL", "sqlite:///./data/app.db"),
+    )
+
+
+settings = get_settings()
 
 
 class RecordStatus(str, Enum):
@@ -15,7 +38,7 @@ class RecordStatus(str, Enum):
     archived = "archived"
 
 
-class InventoryItem(SQLModel, table=True):
+class Item(SQLModel, table=True):
     id: int | None = SQLField(default=None, primary_key=True)
     name: str = SQLField(index=True, min_length=2, max_length=120)
     description: str | None = SQLField(default=None, max_length=500)
@@ -25,14 +48,14 @@ class InventoryItem(SQLModel, table=True):
     updated_at: datetime = SQLField(default_factory=datetime.utcnow)
 
 
-class InventoryItemCreate(BaseModel):
+class ItemCreate(BaseModel):
     name: str = Field(min_length=2, max_length=120)
     description: str | None = Field(default=None, max_length=500)
     owner: str | None = Field(default=None, max_length=80)
     status: RecordStatus = Field(default=RecordStatus.draft)
 
 
-class InventoryItemUpdate(BaseModel):
+class ItemUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: str | None = Field(default=None, min_length=2, max_length=120)
@@ -41,7 +64,9 @@ class InventoryItemUpdate(BaseModel):
     status: RecordStatus | None = None
 
 
-class InventoryItemRead(BaseModel):
+class ItemRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     name: str
     description: str | None
@@ -51,8 +76,11 @@ class InventoryItemRead(BaseModel):
     updated_at: datetime
 
 
-engine = create_engine("sqlite:///data/app.db", connect_args={"check_same_thread": False})
-app = FastAPI(title="Inventory API", version="1.0.0")
+engine = create_engine(
+    settings.database_url,
+    connect_args={"check_same_thread": False} if settings.database_url.startswith("sqlite") else {},
+)
+app = FastAPI(title=settings.app_name, version="1.1.0")
 
 
 def get_session() -> Generator[Session, None, None]:
@@ -61,8 +89,7 @@ def get_session() -> Generator[Session, None, None]:
 
 
 def verify_token(x_api_token: str | None = Header(default=None, alias="X-API-Token")) -> None:
-    # 生产环境请改为读取安全配置中心，并增加细粒度权限控制。
-    if x_api_token not in (None, "dev-token"):
+    if x_api_token != settings.api_token:
         raise HTTPException(status_code=401, detail="Invalid API token")
 
 
@@ -71,52 +98,66 @@ def on_startup() -> None:
     SQLModel.metadata.create_all(engine)
 
 
+@app.get("/")
+def index() -> dict[str, str]:
+    return {
+        "name": settings.app_name,
+        "version": app.version,
+        "docs": "/docs",
+        "openapi": "/openapi.json",
+        "api_prefix": settings.api_prefix,
+    }
+
+
 @app.get("/health/live")
 def health_live() -> dict[str, str]:
-    return {"status": "ok"}
+    return {"status": "ok", "service": settings.app_name}
 
 
-@app.post("/api/v1/items", response_model=InventoryItemRead, dependencies=[Depends(verify_token)])
-def create_record(payload: InventoryItemCreate, session: Session = Depends(get_session)) -> InventoryItem:
-    record = InventoryItem(**payload.model_dump())
+@app.get("/health/ready")
+def health_ready() -> dict[str, str]:
+    with engine.connect() as conn:
+        conn.execute(text("SELECT 1"))
+    return {"status": "ready", "service": settings.app_name}
+
+
+@app.post(f"{settings.api_prefix}/items", response_model=ItemRead, dependencies=[Depends(verify_token)])
+def create_record(payload: ItemCreate, session: Session = Depends(get_session)) -> Item:
+    record = Item(**payload.model_dump())
     session.add(record)
     session.commit()
     session.refresh(record)
     return record
 
 
-@app.get("/api/v1/items", response_model=list[InventoryItemRead], dependencies=[Depends(verify_token)])
+@app.get(f"{settings.api_prefix}/items", response_model=list[ItemRead], dependencies=[Depends(verify_token)])
 def list_records(
     status: RecordStatus | None = Query(default=None),
     owner: str | None = Query(default=None, max_length=80),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     session: Session = Depends(get_session),
-) -> list[InventoryItem]:
-    stmt = select(InventoryItem)
+) -> list[Item]:
+    stmt = select(Item)
     if status:
-        stmt = stmt.where(InventoryItem.status == status)
+        stmt = stmt.where(Item.status == status)
     if owner:
-        stmt = stmt.where(InventoryItem.owner == owner)
-    stmt = stmt.order_by(InventoryItem.created_at.desc()).offset(offset).limit(limit)
+        stmt = stmt.where(Item.owner == owner)
+    stmt = stmt.order_by(Item.created_at.desc()).offset(offset).limit(limit)
     return list(session.exec(stmt).all())
 
 
-@app.get("/api/v1/items/{record_id}", response_model=InventoryItemRead, dependencies=[Depends(verify_token)])
-def get_record(record_id: int, session: Session = Depends(get_session)) -> InventoryItem:
-    record = session.get(InventoryItem, record_id)
+@app.get(f"{settings.api_prefix}/items/{{record_id}}", response_model=ItemRead, dependencies=[Depends(verify_token)])
+def get_record(record_id: int, session: Session = Depends(get_session)) -> Item:
+    record = session.get(Item, record_id)
     if not record:
         raise HTTPException(status_code=404, detail="Record not found")
     return record
 
 
-@app.patch("/api/v1/items/{record_id}", response_model=InventoryItemRead, dependencies=[Depends(verify_token)])
-def update_record(
-    record_id: int,
-    payload: InventoryItemUpdate,
-    session: Session = Depends(get_session),
-) -> InventoryItem:
-    record = session.get(InventoryItem, record_id)
+@app.patch(f"{settings.api_prefix}/items/{{record_id}}", response_model=ItemRead, dependencies=[Depends(verify_token)])
+def update_record(record_id: int, payload: ItemUpdate, session: Session = Depends(get_session)) -> Item:
+    record = session.get(Item, record_id)
     if not record:
         raise HTTPException(status_code=404, detail="Record not found")
 

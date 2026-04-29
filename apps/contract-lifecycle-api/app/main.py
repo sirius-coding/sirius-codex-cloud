@@ -1,12 +1,35 @@
 from __future__ import annotations
 
+import os
+from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from typing import Generator
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy import text
 from sqlmodel import Field as SQLField, Session, SQLModel, create_engine, select
+
+
+@dataclass(frozen=True)
+class Settings:
+    app_name: str
+    api_prefix: str
+    api_token: str
+    database_url: str
+
+
+def get_settings() -> Settings:
+    return Settings(
+        app_name=os.getenv("APP_NAME", "Contract Lifecycle API"),
+        api_prefix=os.getenv("API_PREFIX", "/api/v1"),
+        api_token=os.getenv("API_TOKEN", "dev-token"),
+        database_url=os.getenv("DATABASE_URL", "sqlite:///./data/app.db"),
+    )
+
+
+settings = get_settings()
 
 
 class RecordStatus(str, Enum):
@@ -42,6 +65,8 @@ class ContractUpdate(BaseModel):
 
 
 class ContractRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     name: str
     description: str | None
@@ -51,8 +76,11 @@ class ContractRead(BaseModel):
     updated_at: datetime
 
 
-engine = create_engine("sqlite:///data/app.db", connect_args={"check_same_thread": False})
-app = FastAPI(title="Contract Lifecycle API", version="1.0.0")
+engine = create_engine(
+    settings.database_url,
+    connect_args={"check_same_thread": False} if settings.database_url.startswith("sqlite") else {},
+)
+app = FastAPI(title=settings.app_name, version="1.1.0")
 
 
 def get_session() -> Generator[Session, None, None]:
@@ -61,8 +89,7 @@ def get_session() -> Generator[Session, None, None]:
 
 
 def verify_token(x_api_token: str | None = Header(default=None, alias="X-API-Token")) -> None:
-    # 生产环境请改为读取安全配置中心，并增加细粒度权限控制。
-    if x_api_token not in (None, "dev-token"):
+    if x_api_token != settings.api_token:
         raise HTTPException(status_code=401, detail="Invalid API token")
 
 
@@ -71,12 +98,30 @@ def on_startup() -> None:
     SQLModel.metadata.create_all(engine)
 
 
+@app.get("/")
+def index() -> dict[str, str]:
+    return {
+        "name": settings.app_name,
+        "version": app.version,
+        "docs": "/docs",
+        "openapi": "/openapi.json",
+        "api_prefix": settings.api_prefix,
+    }
+
+
 @app.get("/health/live")
 def health_live() -> dict[str, str]:
-    return {"status": "ok"}
+    return {"status": "ok", "service": settings.app_name}
 
 
-@app.post("/api/v1/contracts", response_model=ContractRead, dependencies=[Depends(verify_token)])
+@app.get("/health/ready")
+def health_ready() -> dict[str, str]:
+    with engine.connect() as conn:
+        conn.execute(text("SELECT 1"))
+    return {"status": "ready", "service": settings.app_name}
+
+
+@app.post(f"{settings.api_prefix}/contracts", response_model=ContractRead, dependencies=[Depends(verify_token)])
 def create_record(payload: ContractCreate, session: Session = Depends(get_session)) -> Contract:
     record = Contract(**payload.model_dump())
     session.add(record)
@@ -85,7 +130,7 @@ def create_record(payload: ContractCreate, session: Session = Depends(get_sessio
     return record
 
 
-@app.get("/api/v1/contracts", response_model=list[ContractRead], dependencies=[Depends(verify_token)])
+@app.get(f"{settings.api_prefix}/contracts", response_model=list[ContractRead], dependencies=[Depends(verify_token)])
 def list_records(
     status: RecordStatus | None = Query(default=None),
     owner: str | None = Query(default=None, max_length=80),
@@ -102,7 +147,7 @@ def list_records(
     return list(session.exec(stmt).all())
 
 
-@app.get("/api/v1/contracts/{record_id}", response_model=ContractRead, dependencies=[Depends(verify_token)])
+@app.get(f"{settings.api_prefix}/contracts/{{record_id}}", response_model=ContractRead, dependencies=[Depends(verify_token)])
 def get_record(record_id: int, session: Session = Depends(get_session)) -> Contract:
     record = session.get(Contract, record_id)
     if not record:
@@ -110,12 +155,8 @@ def get_record(record_id: int, session: Session = Depends(get_session)) -> Contr
     return record
 
 
-@app.patch("/api/v1/contracts/{record_id}", response_model=ContractRead, dependencies=[Depends(verify_token)])
-def update_record(
-    record_id: int,
-    payload: ContractUpdate,
-    session: Session = Depends(get_session),
-) -> Contract:
+@app.patch(f"{settings.api_prefix}/contracts/{{record_id}}", response_model=ContractRead, dependencies=[Depends(verify_token)])
+def update_record(record_id: int, payload: ContractUpdate, session: Session = Depends(get_session)) -> Contract:
     record = session.get(Contract, record_id)
     if not record:
         raise HTTPException(status_code=404, detail="Record not found")

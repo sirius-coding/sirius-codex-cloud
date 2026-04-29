@@ -1,82 +1,68 @@
 # 程序员私活项目模板（Freelance Starter）
 
-这是一个面向 **程序员接私活** 的生产级模板仓库，默认包含多个可独立交付的中型项目，并且仓库结构已调整为 **可扩展多项目（Monorepo-ready）**。
+这是一个面向接单交付场景的多项目模板仓库。`apps/` 下的每个子项目都保持独立可交付，根目录负责统一编排、文档和交付规范。
 
 ## 当前内置项目
 
+### API 服务
+
 - `freelance-api`：客户与项目管理 API（FastAPI）
-- `web-crawler`：可配置的通用爬虫任务
-- `booking-api`：预约/排期管理 API（冲突检测 + 状态流转）
-- `expense-tracker`：自由职业者支出管理 CLI（流水 + 月报）
-- `file-backup-worker`：增量备份 Worker（哈希去重 + 保留策略）
-- `crm-api`：CRM 客户档案 API（客户信息 + 负责人 + 状态）
-- `invoice-service`：发票管理 API（开票 + 跟踪 + 状态）
-- `helpdesk-api`：售后工单 API（优先级 + 生命周期）
-- `inventory-api`：库存管理 API（库存条目 + 预警）
-- `subscription-billing-api`：订阅计费 API（订阅记录 + 状态）
-- `notification-hub`：通知任务 API（消息队列前置落库）
-- `contract-lifecycle-api`：合同管理 API（金额 + 起止日期 + 状态）
-- `timesheet-api`：工时记录 API（工时项 + 负责人 + 状态）
-- `lead-scoring-api`：销售线索 API（线索评分与阶段）
-- `knowledge-base-api`：知识库 API（文档条目 + 发布状态）
+- `booking-api`：预约/排期管理 API
+- `crm-api`：客户档案 API
+- `invoice-service`：发票管理 API
+- `helpdesk-api`：工单管理 API
+- `inventory-api`：库存管理 API
+- `subscription-billing-api`：订阅计费 API
+- `notification-hub`：通知中心 API
+- `contract-lifecycle-api`：合同管理 API
+- `timesheet-api`：工时管理 API
+- `lead-scoring-api`：销售线索 API
+- `knowledge-base-api`：知识库 API
+- `china-commerce-starter`：Spring Boot 电商骨架
 
-这些项目都可以直接作为外包交付的起点，或作为你自己的工具链组件。
+### CLI / Worker
 
-## 核心目标
+- `expense-tracker`：自由职业者支出管理 CLI
+- `file-backup-worker`：增量备份 Worker
+- `web-crawler`：单域名 BFS 爬虫
 
-- **多项目可扩展**：`apps/` 目录可持续新增服务，不影响现有项目。
-- **生产级默认配置**：健康检查、结构化日志、CORS、DB 可用性探针、容器非 root 运行。
-- **可交付与可运维**：开箱即用 docker-compose，默认配置适合演示与小规模生产。
-- **文档完整**：含架构、API、部署、二次开发说明。
+## 交付基线
 
-## 技术栈
+本轮仓库统一升级后的交付要求：
 
-- Python 3.12
-- FastAPI / SQLModel / SQLite
-- Docker / Docker Compose
-- MkDocs（可选：文档站点）
+- 每个子项目都具备独立 README、启动命令、验证命令、配置说明。
+- Python API 统一具备 `health/live`、`health/ready`、鉴权、SQLite 默认交付和 PostgreSQL 升级入口。
+- CLI / Worker 统一具备参数校验、示例命令和自动化测试。
+- 根目录提供统一启动、停止、状态查看脚本和升级路线文档。
+
+升级顺序与状态见 [docs/roadmaps/2026-04-29-subproject-delivery-upgrade-plan.md](docs/roadmaps/2026-04-29-subproject-delivery-upgrade-plan.md)。
 
 ## 快速开始
 
-### 1) 准备环境变量
+### 1) 初始化环境
 
 ```bash
-cp .env.example .env
+bash scripts/bootstrap.sh
 ```
 
-> 请修改 `.env` 里的 `API_TOKEN`，用于接口鉴权。
+如已存在 `.env`，脚本不会覆盖。首次使用请修改 `API_TOKEN` 等变量。
 
-### 2) 启动核心项目
+### 2) 使用统一脚本
 
 ```bash
-docker compose up -d --build
+bash scripts/up.sh
+bash scripts/up.sh booking-api
+bash scripts/status.sh
+bash scripts/down.sh
 ```
 
-默认启动 `freelance-api`。
+默认启动 `freelance-api`；传入服务名时会按对应 profile 启动指定子项目。
 
-### 3) 按需启动其他项目
+### 3) 文档与 OpenAPI
 
-```bash
-# 爬虫
-docker compose --profile crawler up --build web-crawler
-
-# 预约 API
-docker compose --profile booking up --build booking-api
-
-# 支出管理 CLI（展示帮助）
-docker compose --profile expense up --build expense-tracker
-
-# 文件备份 Worker（展示帮助）
-docker compose --profile backup up --build file-backup-worker
-
-# 新增接单项目（示例：CRM）
-docker compose --profile crm up --build crm-api
-```
-
-### 4) API 访问示例
-
-- Freelance API 根地址: http://localhost:8000
-- Booking API 根地址: http://localhost:8010
+- 仓库级文档在 `docs/`
+- FastAPI 项目默认在线暴露 `/openapi.json`
+- 每个 API README 都包含 Apifox 导入和导出命令
 
 ## 文档目录
 
@@ -84,45 +70,22 @@ docker compose --profile crm up --build crm-api
 - [API 文档](docs/API.md)
 - [部署指南](docs/DEPLOYMENT.md)
 - [定制指南](docs/CUSTOMIZATION.md)
+- [升级路线](docs/roadmaps/2026-04-29-subproject-delivery-upgrade-plan.md)
 
-## 一键预览文档站（可选）
-
-```bash
-docker compose --profile docs up docs
-```
-
-文档地址： http://localhost:9000
-
-## 项目结构（Monorepo-ready）
+## 项目结构
 
 ```text
 .
-├── apps/
-│   ├── freelance-api/
-│   ├── web-crawler/
-│   ├── booking-api/
-│   ├── expense-tracker/
-│   ├── file-backup-worker/
-│   ├── crm-api/
-│   ├── invoice-service/
-│   ├── helpdesk-api/
-│   ├── inventory-api/
-│   ├── subscription-billing-api/
-│   ├── notification-hub/
-│   ├── contract-lifecycle-api/
-│   ├── timesheet-api/
-│   ├── lead-scoring-api/
-│   └── knowledge-base-api/
-├── docs/
-├── scripts/
-├── .env.example
-├── docker-compose.yml
-├── mkdocs.yml
+├── apps/                     # 独立交付子项目
+├── docs/                     # 仓库级文档与路线
+├── scripts/                  # 统一启动、停止、状态、导出脚本
+├── docker-compose.yml        # 根级编排
+├── .env.example             # 演示环境变量模板
 └── README.md
 ```
 
-## 后续新增项目建议
+## 验证建议
 
-- 在 `apps/` 下继续新增独立目录，例如：`apps/admin-web`、`apps/report-worker`。
-- 每个项目独立维护其启动方式、Dockerfile、依赖与 README。
-- 通过根目录 `docker-compose.yml` 聚合编排。
+- Python API：在项目目录执行 `python -m unittest discover -s tests`
+- Java 项目：在 `apps/china-commerce-starter` 执行 `mvn test`
+- Docker 环境可用时：配合 `scripts/up.sh` 做容器级联调

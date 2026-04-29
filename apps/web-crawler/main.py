@@ -1,5 +1,6 @@
 import argparse
 import json
+import os
 import time
 from collections import deque
 from dataclasses import dataclass, asdict
@@ -26,6 +27,8 @@ def normalize_url(url: str) -> str:
 
 
 def crawl(start_url: str, max_pages: int, timeout: int = 10) -> list[CrawlResult]:
+    if max_pages <= 0:
+        raise ValueError("max_pages 必须大于 0")
     base = urlparse(start_url)
     visited: Set[str] = set()
     queue = deque([start_url])
@@ -34,7 +37,7 @@ def crawl(start_url: str, max_pages: int, timeout: int = 10) -> list[CrawlResult
     session = requests.Session()
     session.headers.update(
         {
-            "User-Agent": "sirius-codex-crawler/1.0 (+https://localhost)",
+            "User-Agent": os.getenv("CRAWLER_USER_AGENT", "sirius-codex-crawler/1.0 (+https://localhost)"),
             "Accept": "text/html,application/xhtml+xml",
         }
     )
@@ -95,6 +98,10 @@ def main() -> None:
         help="Run continuously with this interval; 0 means run once",
     )
     args = parser.parse_args()
+    if args.max_pages <= 0:
+        raise SystemExit("max-pages 必须大于 0")
+    if args.interval_seconds < 0:
+        raise SystemExit("interval-seconds 不能小于 0")
 
     start_url = normalize_url(args.url)
     if args.interval_seconds <= 0:
