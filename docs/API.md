@@ -1,59 +1,50 @@
-# API 文档（默认模板）
+# API 文档
 
-## 基础信息
+## 统一约定
 
-- Base URL: `http://localhost:8000`
-- 鉴权方式：`Authorization: Bearer <API_TOKEN>`
-- 业务 API 前缀：`/api/v1`
+### FastAPI 子项目
 
-## 健康检查
+- 默认前缀：`/api/v1`
+- 默认鉴权：`X-API-Token: <API_TOKEN>`，`freelance-api` 使用 `Authorization: Bearer <API_TOKEN>`
+- 在线文档：`/docs`
+- OpenAPI：`/openapi.json`
+- 健康检查：`/health/live`、`/health/ready`
 
-### `GET /health/live`
-用于容器存活探针（liveness）。
+### Apifox 导入
 
-### `GET /health/ready`
-用于依赖可用性探针（readiness，含数据库检查）。
+FastAPI 子项目启动后，可直接导入对应服务的 `http://localhost:<port>/openapi.json`。
 
-## 客户接口
+也可在项目目录中导出：
 
-### 创建客户
-`POST /api/v1/clients`
-
-请求体：
-
-```json
-{
-  "name": "某某科技",
-  "contact": "王总 138xxxx",
-  "notes": "老客户"
-}
+```bash
+python -c 'import json; from app.main import app; print(json.dumps(app.openapi(), ensure_ascii=False, indent=2))' > openapi.json
 ```
 
-### 客户列表
-`GET /api/v1/clients?limit=50&offset=0`
+## 参考接口
 
-## 项目接口
+### `freelance-api`
 
-### 创建项目
-`POST /api/v1/projects`
+- `POST /api/v1/clients`
+- `GET /api/v1/clients`
+- `POST /api/v1/projects`
+- `GET /api/v1/projects`
 
-请求体：
+### 通用 CRUD API
 
-```json
-{
-  "client_id": 1,
-  "title": "官网改版",
-  "status": "doing",
-  "budget": 20000,
-  "deadline": "2026-12-31"
-}
-```
+以下项目统一提供：创建、列表、详情、更新四类接口。
 
-### 项目列表
-`GET /api/v1/projects?limit=50&offset=0`
+- `crm-api`：`/customers`
+- `invoice-service`：`/invoices`
+- `helpdesk-api`：`/tickets`
+- `inventory-api`：`/items`
+- `subscription-billing-api`：`/subscriptions`
+- `notification-hub`：`/messages`
+- `contract-lifecycle-api`：`/contracts`
+- `timesheet-api`：`/timesheets`
+- `lead-scoring-api`：`/leads`
+- `knowledge-base-api`：`/articles`
 
-## 在线文档
+### 特殊项目
 
-启动后访问：
-- Swagger UI: `/docs`
-- ReDoc: `/redoc`
+- `booking-api`：预约创建、按日期/状态过滤、状态流转
+- `china-commerce-starter`：注册、商品、购物车、订单、支付

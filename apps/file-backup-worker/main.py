@@ -43,6 +43,8 @@ def save_manifest(path: Path, records: list[BackupRecord]) -> None:
 def backup_folder(source_dir: Path, target_dir: Path, keep: int) -> None:
     if not source_dir.exists() or not source_dir.is_dir():
         raise ValueError(f"源目录不存在: {source_dir}")
+    if keep < 0:
+        raise ValueError("keep 不能小于 0")
 
     target_dir.mkdir(parents=True, exist_ok=True)
     manifest_path = target_dir / "manifest.json"

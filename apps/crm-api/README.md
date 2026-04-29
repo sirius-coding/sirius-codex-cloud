@@ -1,50 +1,49 @@
 # CRM API
 
-这是一个面向接单交付的 **客户管理** 服务模板，具备可直接上线的小型生产能力。
+面向接单交付的独立 API 服务，已经补齐基础交付能力：
 
-## 功能清单
-
-- 统一健康检查：`/health/live`
-- 鉴权入口：`X-API-Token`（默认兼容开发态 `dev-token`）
-- SQLite 持久化存储（容器挂载 `data/`）
-- 完整 CRUD：创建、列表、详情、更新
-- 列表过滤：支持按状态与负责人过滤，支持分页参数 `limit/offset`
-
-## 接口概览
-
-- `POST /api/v1/customers`：创建记录
-- `GET /api/v1/customers`：分页查询记录
-- `GET /api/v1/customers/{id}`：查看单条记录
-- `PATCH /api/v1/customers/{id}`：更新记录
+- `GET /health/live` 与 `GET /health/ready`
+- `X-API-Token` 鉴权
+- 默认 SQLite 存储，可通过 `DATABASE_URL` 升级
+- 在线 OpenAPI 与 Apifox 导入
+- `tests/` 下最小自动化验证
 
 ## 本地运行
 
 ```bash
-pip install -r requirements.txt
+cd apps/crm-api
+export API_TOKEN=dev-token
 uvicorn app.main:app --host 0.0.0.0 --port 8021 --reload
 ```
 
 ## Docker 运行
 
 ```bash
-docker build -t crm-api:local .
-docker run --rm -p 8021:8021 -v $(pwd)/data:/app/data crm-api:local
+cd <repo-root>
+docker compose --profile crm up --build crm-api
 ```
 
-## 生产部署建议
-
-1. 将 `X-API-Token` 改为网关统一鉴权（JWT/OAuth2）。
-2. 将 SQLite 升级为 PostgreSQL，并接入迁移工具（Alembic）。
-3. 追加审计日志、监控告警与备份策略。
-4. 通过反向代理接入 TLS 与访问限流。
-
-## 示例请求
+## 验证
 
 ```bash
-curl -X POST 'http://localhost:8021/api/v1/customers'   -H 'Content-Type: application/json'   -H 'X-API-Token: dev-token'   -d '{
-    "name": "示例记录",
-    "description": "用于验收联调",
-    "owner": "ops-team",
-    "status": "active"
-  }'
+cd apps/crm-api
+python -m unittest discover -s tests
 ```
+
+## OpenAPI / Apifox
+
+启动后可直接导入：`http://localhost:8021/openapi.json`
+
+也可导出为本地文件：
+
+```bash
+cd apps/crm-api
+python -c 'import json; from app.main import app; print(json.dumps(app.openapi(), ensure_ascii=False, indent=2))' > openapi.json
+```
+
+## 关键环境变量
+
+- `APP_NAME`：服务展示名
+- `API_PREFIX`：默认 `/api/v1`
+- `API_TOKEN`：接口鉴权令牌
+- `DATABASE_URL`：默认 `sqlite:///./data/app.db`
