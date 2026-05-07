@@ -6,6 +6,7 @@
 
 - `crawl video`：按视频 URL 或 `aweme_id` 采集评论，可选采集评论回复。
 - `crawl account`：按账号 URL 或 `sec_user_id` 遍历作品，再逐个采集评论。
+- `crawl replies`：为已有任务补采评论回复，适合二阶段提速。
 - `batch`：按文件批量采集视频和账号目标。
 - `export`：按任务导出 `jsonl` 或 `csv`，支持按 flags 过滤导出视图。
 - `status`：查看指定任务或最近任务状态。
@@ -84,7 +85,9 @@ python3 -m douyin_comment_crawler crawl video --aweme-id "<aweme-id>"
 python3 -m douyin_comment_crawler crawl account --url "https://www.douyin.com/user/<sec-user-id>"
 python3 -m douyin_comment_crawler crawl account --sec-user-id "<sec-user-id>" --include-replies
 
-python3 -m douyin_comment_crawler batch --file targets.txt --include-replies
+python3 -m douyin_comment_crawler crawl replies --job-id "<job-id>" --workers 4 --page-size 50
+
+python3 -m douyin_comment_crawler batch --file targets.txt --include-replies --page-size 50 --workers 4 --min-delay 0.5 --max-delay 1.5
 
 python3 -m douyin_comment_crawler export --job-id "<job-id>" --format jsonl
 python3 -m douyin_comment_crawler export --job-id "<job-id>" --format csv --exclude-flag empty_text --exclude-flag media_only
@@ -95,6 +98,14 @@ python3 -m douyin_comment_crawler resume --job-id "<job-id>" --include-replies
 注意：未配置 `DOUYIN_API_BASE_URL` 时，真实采集命令会进入 `failed` 状态并提示缺少私有 Douyin API 服务。
 
 完整操作说明见 [docs/OPERATIONS.md](docs/OPERATIONS.md)，差距和演进清单见 [docs/GAPS_EVOLUTION.md](docs/GAPS_EVOLUTION.md)。
+
+## 性能参数
+
+- `--page-size`：传给 Download API 的 `count`，建议从 `50` 小步测试。
+- `--workers`：账号作品下的视频并发采集数，建议从 `2` 或 `4` 开始。
+- `--min-delay` / `--max-delay`：现在按 HTTP API 请求限速，不再按每条评论限速。
+- `status --job-id <job-id>` 会输出 `videos_seen`、`comments_seen`、`comments_saved`、`replies_seen`、`api_requests`，用于判断瓶颈。
+- 大任务建议先不加 `--include-replies` 采主评论，再用 `crawl replies --job-id <job-id>` 补回复。
 
 ## 字段说明
 

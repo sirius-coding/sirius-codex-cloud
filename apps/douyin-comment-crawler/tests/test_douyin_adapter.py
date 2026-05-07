@@ -92,6 +92,28 @@ class DouyinAdapterTests(unittest.TestCase):
                 list(adapter.iter_comments(VideoTarget(platform="douyin", aweme_id="v1")))
         self.assertEqual(caught.exception.code, "429")
 
+    def test_http_adapter_throttles_once_per_request_page_and_counts_requests(self) -> None:
+        adapter = DouyinAdapter(
+            api_base_url="https://api.example.test",
+            comments_path="/comments?aweme_id={aweme_id}&cursor={cursor}&count={count}",
+            page_size=50,
+            request_delay_seconds=(1, 1),
+        )
+        responses = [
+            FakeResponse({"data": {"comments": [{"cid": "c1", "text": "a"}], "cursor": "1", "has_more": True}}),
+            FakeResponse({"data": {"comments": [{"cid": "c2", "text": "b"}], "has_more": False}}),
+        ]
+
+        with patch("douyin_comment_crawler.adapters.douyin.urlopen", side_effect=responses) as open_url:
+            with patch("douyin_comment_crawler.adapters.douyin.time.sleep") as sleep:
+                comments = list(adapter.iter_comments(VideoTarget(platform="douyin", aweme_id="v1")))
+
+        self.assertEqual([comment["comment_id"] for comment in comments], ["c1", "c2"])
+        self.assertEqual(adapter.request_count, 2)
+        self.assertEqual(sleep.call_count, 2)
+        first_url = open_url.call_args_list[0].args[0].full_url
+        self.assertIn("count=50", first_url)
+
 
 if __name__ == "__main__":
     unittest.main()

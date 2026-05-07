@@ -6,7 +6,7 @@ from pathlib import Path
 from douyin_comment_crawler.adapters import DouyinAdapter
 from douyin_comment_crawler.batch import crawl_batch_file
 from douyin_comment_crawler.config import load_runtime_config
-from douyin_comment_crawler.crawler import crawl_account, crawl_video
+from douyin_comment_crawler.crawler import crawl_account, crawl_replies_for_job, crawl_video
 from douyin_comment_crawler.exporter import export_job
 from douyin_comment_crawler.models import RiskProfile
 from douyin_comment_crawler.storage import JobStore
@@ -19,30 +19,34 @@ def main() -> None:
     store = JobStore(Path(args.db_path))
 
     if args.command == "crawl":
-        adapter = build_douyin_adapter(config)
+        adapter = build_douyin_adapter(config, args.page_size, args.min_delay, args.max_delay)
         risk = RiskProfile(
             min_delay_seconds=args.min_delay,
             max_delay_seconds=args.max_delay,
             max_failures=args.max_failures,
+            workers=args.workers,
             cookie_group=args.cookie_group,
             proxy_url=args.proxy_url,
         )
         if args.target_type == "video":
             target = args.aweme_id or args.url
             job_id = crawl_video(store, adapter, target, args.include_replies, risk)
-        else:
+        elif args.target_type == "account":
             target = args.sec_user_id or args.url
             job_id = crawl_account(store, adapter, target, args.include_replies, risk)
+        else:
+            job_id = crawl_replies_for_job(store, adapter, args.job_id, risk)
         print(f"job_id={job_id}")
         print(f"status={store.get_job(job_id)['status']}")
         return
 
     if args.command == "batch":
-        adapter = build_douyin_adapter(config)
+        adapter = build_douyin_adapter(config, args.page_size, args.min_delay, args.max_delay)
         risk = RiskProfile(
             min_delay_seconds=args.min_delay,
             max_delay_seconds=args.max_delay,
             max_failures=args.max_failures,
+            workers=args.workers,
             cookie_group=args.cookie_group,
             proxy_url=args.proxy_url,
         )
@@ -83,6 +87,12 @@ def main() -> None:
         print(f"platform={job['platform']}")
         print(f"status={job['status']}")
         print(f"comments={store.count_comments(job['job_id'])}")
+        metrics = store.get_job_metrics(job["job_id"])
+        print(f"videos_seen={metrics['videos_seen']}")
+        print(f"comments_seen={metrics['comments_seen']}")
+        print(f"comments_saved={metrics['comments_saved']}")
+        print(f"replies_seen={metrics['replies_seen']}")
+        print(f"api_requests={metrics['api_requests']}")
         if job.get("cooldown_until"):
             print(f"cooldown_until={job['cooldown_until']}")
         if job.get("last_error"):
@@ -91,8 +101,12 @@ def main() -> None:
 
     if args.command == "resume":
         job = store.get_job(args.job_id)
-        adapter = build_douyin_adapter(config)
-        risk = RiskProfile(min_delay_seconds=args.min_delay, max_delay_seconds=args.max_delay)
+        adapter = build_douyin_adapter(config, args.page_size, args.min_delay, args.max_delay)
+        risk = RiskProfile(
+            min_delay_seconds=args.min_delay,
+            max_delay_seconds=args.max_delay,
+            workers=args.workers,
+        )
         if job["target_type"] == "video":
             job_id = crawl_video(store, adapter, job["target"], args.include_replies, risk, job_id=args.job_id)
         else:
@@ -112,15 +126,19 @@ def build_parser() -> argparse.ArgumentParser:
 
     video = crawl_sub.add_parser("video", help="采集单个视频评论")
     _add_target_options(video, url=True, aweme_id=True)
-    _add_risk_options(video)
+    _add_risk_options(video, include_replies=True)
 
     account = crawl_sub.add_parser("account", help="采集账号作品及评论")
     _add_target_options(account, url=True, sec_user_id=True)
-    _add_risk_options(account)
+    _add_risk_options(account, include_replies=True)
+
+    replies = crawl_sub.add_parser("replies", help="为已有任务补采评论回复")
+    replies.add_argument("--job-id", required=True)
+    _add_risk_options(replies, include_replies=False)
 
     batch = sub.add_parser("batch", help="按文件批量采集")
     batch.add_argument("--file", required=True, help="每行格式：video,<target> 或 account,<target>")
-    _add_risk_options(batch)
+    _add_risk_options(batch, include_replies=True)
 
     export = sub.add_parser("export", help="导出任务数据")
     export.add_argument("--job-id", required=True)
@@ -137,10 +155,17 @@ def build_parser() -> argparse.ArgumentParser:
     resume.add_argument("--include-replies", action="store_true")
     resume.add_argument("--min-delay", type=float, default=1.0)
     resume.add_argument("--max-delay", type=float, default=3.0)
+    resume.add_argument("--page-size", type=int)
+    resume.add_argument("--workers", type=int, default=1)
     return parser
 
 
-def build_douyin_adapter(config) -> DouyinAdapter:
+def build_douyin_adapter(
+    config,
+    page_size_override: int | None = None,
+    min_delay: float = 1.0,
+    max_delay: float = 3.0,
+) -> DouyinAdapter:
     return DouyinAdapter(
         cookie=config.douyin_cookie,
         proxy_url=config.douyin_proxy_url,
@@ -148,8 +173,9 @@ def build_douyin_adapter(config) -> DouyinAdapter:
         comments_path=config.douyin_comments_path,
         replies_path=config.douyin_replies_path,
         user_posts_path=config.douyin_user_posts_path,
-        page_size=config.douyin_page_size,
+        page_size=page_size_override or config.douyin_page_size,
         timeout_seconds=config.douyin_timeout_seconds,
+        request_delay_seconds=(min_delay, max_delay),
     )
 
 
@@ -163,11 +189,14 @@ def _add_target_options(parser: argparse.ArgumentParser, url: bool = False, awem
         group.add_argument("--sec-user-id")
 
 
-def _add_risk_options(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--include-replies", action="store_true")
+def _add_risk_options(parser: argparse.ArgumentParser, include_replies: bool) -> None:
+    if include_replies:
+        parser.add_argument("--include-replies", action="store_true")
     parser.add_argument("--min-delay", type=float, default=1.0)
     parser.add_argument("--max-delay", type=float, default=3.0)
     parser.add_argument("--max-failures", type=int, default=3)
+    parser.add_argument("--page-size", type=int)
+    parser.add_argument("--workers", type=int, default=1)
     parser.add_argument("--cookie-group")
     parser.add_argument("--proxy-url")
 

@@ -37,6 +37,7 @@ class RiskProfile:
     min_delay_seconds: float = 1.0
     max_delay_seconds: float = 3.0
     max_failures: int = 3
+    workers: int = 1
     retry_backoff_base_seconds: float = 2.0
     cookie_group: str | None = None
     proxy_url: str | None = None

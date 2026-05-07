@@ -53,8 +53,9 @@ python3 -m douyin_comment_crawler status
 python3 -m douyin_comment_crawler crawl video \
   --aweme-id "<aweme-id>" \
   --include-replies \
-  --min-delay 2 \
-  --max-delay 6 \
+  --page-size 50 \
+  --min-delay 0.5 \
+  --max-delay 1.5 \
   --cookie-group primary
 ```
 
@@ -78,8 +79,10 @@ status=<completed|failed|cooldown>
 python3 -m douyin_comment_crawler crawl account \
   --sec-user-id "<sec-user-id>" \
   --include-replies \
-  --min-delay 3 \
-  --max-delay 8 \
+  --page-size 50 \
+  --workers 4 \
+  --min-delay 0.5 \
+  --max-delay 1.5 \
   --cookie-group primary
 ```
 
@@ -108,8 +111,10 @@ account,https://www.douyin.com/user/<sec-user-id-2>
 python3 -m douyin_comment_crawler batch \
   --file targets.txt \
   --include-replies \
-  --min-delay 3 \
-  --max-delay 10 \
+  --page-size 50 \
+  --workers 4 \
+  --min-delay 0.5 \
+  --max-delay 1.5 \
   --cookie-group primary
 ```
 
@@ -135,6 +140,14 @@ python3 -m douyin_comment_crawler status --health
 
 如果任务进入 `cooldown`，先检查 `cooldown_until` 和 `last_error`。不要立即提高频率重试。
 
+状态中还会显示：
+
+- `videos_seen`：已发现或已调度的视频数
+- `comments_seen`：adapter 返回的评论/回复记录数
+- `comments_saved`：去重后实际入库数
+- `replies_seen`：回复记录数
+- `api_requests`：HTTP adapter 请求页数
+
 ## 8. 断点续跑
 
 ```bash
@@ -147,7 +160,33 @@ python3 -m douyin_comment_crawler resume \
 
 续跑会使用 SQLite 中保存的账号、评论和回复游标。
 
-## 9. 导出交付文件
+## 9. 二阶段补采回复
+
+为了提高主评论吞吐，大批量账号任务建议先不加 `--include-replies`，让主评论先完成：
+
+```bash
+python3 -m douyin_comment_crawler crawl account \
+  --sec-user-id "<sec-user-id>" \
+  --page-size 50 \
+  --workers 4 \
+  --min-delay 0.5 \
+  --max-delay 1.5
+```
+
+主评论完成后，再按同一个 `job_id` 补采回复：
+
+```bash
+python3 -m douyin_comment_crawler crawl replies \
+  --job-id "<job-id>" \
+  --page-size 50 \
+  --workers 4 \
+  --min-delay 0.5 \
+  --max-delay 1.5
+```
+
+该命令会读取任务中已入库的主评论，只补采 `parent_comment_id` 为空的评论回复。重复执行时依赖评论 ID 去重和回复游标，不会重复导出同一条回复。
+
+## 10. 导出交付文件
 
 导出 JSONL：
 
@@ -169,14 +208,14 @@ python3 -m douyin_comment_crawler export \
 
 默认导出目录是 `exports/`。
 
-## 10. 日常验证
+## 11. 日常验证
 
 ```bash
 python3 -m unittest discover -s tests
 ruby -e 'require "yaml"; data = YAML.load_file("openapi/comment-crawler.openapi.yaml"); puts data["openapi"]'
 ```
 
-## 11. 停止与数据保留
+## 12. 停止与数据保留
 
 ```bash
 bash scripts/down.sh
@@ -184,13 +223,24 @@ bash scripts/down.sh
 
 当前 CLI 没有后台服务，`down.sh` 不删除 `data/` 和 `exports/`。这两个目录用于续跑和交付文件，已被 `.gitignore` 忽略。
 
-## 12. 投产检查清单
+## 13. 投产检查清单
 
 - 已确认采集范围是公开可访问或你有权访问的数据。
 - 已确认私有 API 服务可用，接口路径模板匹配实际返回结构。
 - `.env` 未提交，真实 Cookie、代理、账号组只在本地或私有系统保存。
 - 已先用小样本视频跑通评论和回复采集。
 - 已确认 `status --health` 不显示异常冷却。
-- 已设置保守限速，例如 `--min-delay 3 --max-delay 10`。
+- 已设置保守限速和并发，例如 `--page-size 50 --workers 4 --min-delay 0.5 --max-delay 1.5`。
 - 已导出 JSONL 和 CSV，并抽样检查中文、emoji、空文本和回复字段。
 - 已跑 `python3 -m unittest discover -s tests`。
+
+## 14. 性能调优建议
+
+如果吞吐低，按以下顺序调：
+
+1. 先确认没有 `--include-replies`，只采主评论做基准。
+2. 把 `--page-size` 从 `20` 提到 `50`，观察 `api_requests` 是否明显下降。
+3. 账号任务把 `--workers` 从 `1` 提到 `2`，稳定后再试 `4`。
+4. 主评论完成后再执行 `crawl replies` 补回复。
+5. 把 `--min-delay/--max-delay` 当作“每个 API 请求”的间隔，不再按评论条数估算。
+6. 如果出现 `cooldown`、403、429 或登录异常，降低 `workers` 和 `page-size`，不要强行重试。

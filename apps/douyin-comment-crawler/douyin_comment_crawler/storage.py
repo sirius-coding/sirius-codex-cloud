@@ -20,6 +20,7 @@ class JobStore:
     def connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA busy_timeout = 5000")
         return conn
 
     @contextmanager
@@ -35,6 +36,7 @@ class JobStore:
         with self.connection() as conn:
             conn.executescript(
                 """
+                PRAGMA journal_mode = WAL;
                 CREATE TABLE IF NOT EXISTS jobs (
                     job_id TEXT PRIMARY KEY,
                     target_type TEXT NOT NULL,
@@ -85,6 +87,15 @@ class JobStore:
                     cooldown_until TEXT,
                     updated_at TEXT NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS job_metrics (
+                    job_id TEXT PRIMARY KEY,
+                    videos_seen INTEGER NOT NULL DEFAULT 0,
+                    comments_seen INTEGER NOT NULL DEFAULT 0,
+                    comments_saved INTEGER NOT NULL DEFAULT 0,
+                    replies_seen INTEGER NOT NULL DEFAULT 0,
+                    api_requests INTEGER NOT NULL DEFAULT 0,
+                    updated_at TEXT NOT NULL
+                );
                 """
             )
             _ensure_column(conn, "jobs", "cooldown_until", "TEXT")
@@ -99,6 +110,10 @@ class JobStore:
                 VALUES (?, ?, ?, ?, 'running', ?, ?)
                 """,
                 (job_id, target_type, platform, target, now, now),
+            )
+            conn.execute(
+                "INSERT INTO job_metrics (job_id, updated_at) VALUES (?, ?)",
+                (job_id, now),
             )
         return job_id
 
@@ -161,6 +176,22 @@ class JobStore:
         with self.connection() as conn:
             rows = conn.execute(
                 "SELECT * FROM comments WHERE job_id = ? ORDER BY rowid ASC",
+                (job_id,),
+            ).fetchall()
+        for row in rows:
+            item = dict(row)
+            flags_json = item.pop("flags_json")
+            item["flags"] = json.loads(flags_json)
+            yield item
+
+    def iter_parent_comments(self, job_id: str) -> Iterable[dict[str, Any]]:
+        with self.connection() as conn:
+            rows = conn.execute(
+                """
+                SELECT * FROM comments
+                WHERE job_id = ? AND parent_comment_id IS NULL
+                ORDER BY rowid ASC
+                """,
                 (job_id,),
             ).fetchall()
         for row in rows:
@@ -249,6 +280,57 @@ class JobStore:
         with self.connection() as conn:
             rows = conn.execute("SELECT * FROM account_health ORDER BY updated_at DESC").fetchall()
         return [dict(row) for row in rows]
+
+    def increment_metric(self, job_id: str, metric: str, amount: int = 1) -> None:
+        allowed = {"videos_seen", "comments_seen", "comments_saved", "replies_seen", "api_requests"}
+        if metric not in allowed:
+            raise ValueError(f"unsupported metric: {metric}")
+        with self.connection() as conn:
+            conn.execute(
+                """
+                INSERT INTO job_metrics (job_id, updated_at)
+                VALUES (?, ?)
+                ON CONFLICT(job_id) DO NOTHING
+                """,
+                (job_id, _now()),
+            )
+            conn.execute(
+                f"UPDATE job_metrics SET {metric} = {metric} + ?, updated_at = ? WHERE job_id = ?",
+                (amount, _now(), job_id),
+            )
+
+    def set_metric(self, job_id: str, metric: str, value: int) -> None:
+        allowed = {"videos_seen", "comments_seen", "comments_saved", "replies_seen", "api_requests"}
+        if metric not in allowed:
+            raise ValueError(f"unsupported metric: {metric}")
+        with self.connection() as conn:
+            conn.execute(
+                """
+                INSERT INTO job_metrics (job_id, updated_at)
+                VALUES (?, ?)
+                ON CONFLICT(job_id) DO NOTHING
+                """,
+                (job_id, _now()),
+            )
+            conn.execute(
+                f"UPDATE job_metrics SET {metric} = ?, updated_at = ? WHERE job_id = ?",
+                (value, _now(), job_id),
+            )
+
+    def get_job_metrics(self, job_id: str) -> dict[str, Any]:
+        with self.connection() as conn:
+            row = conn.execute("SELECT * FROM job_metrics WHERE job_id = ?", (job_id,)).fetchone()
+        if row is None:
+            return {
+                "job_id": job_id,
+                "videos_seen": 0,
+                "comments_seen": 0,
+                "comments_saved": 0,
+                "replies_seen": 0,
+                "api_requests": 0,
+                "updated_at": None,
+            }
+        return dict(row)
 
 
 def _now() -> str:

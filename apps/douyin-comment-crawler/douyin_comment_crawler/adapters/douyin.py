@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import os
 import json
+import random
+import time
 from typing import Iterable
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode, urljoin
@@ -32,6 +34,7 @@ class DouyinAdapter(PlatformAdapter):
         user_posts_path: str | None = None,
         page_size: int = 20,
         timeout_seconds: float = 20,
+        request_delay_seconds: tuple[float, float] = (0.0, 0.0),
     ) -> None:
         self.cookie = cookie or os.getenv("DOUYIN_COOKIE")
         self.proxy_url = proxy_url or os.getenv("DOUYIN_PROXY_URL")
@@ -42,14 +45,16 @@ class DouyinAdapter(PlatformAdapter):
         )
         self.replies_path = replies_path or os.getenv(
             "DOUYIN_REPLIES_PATH",
-            "/api/douyin/web/fetch_comment_replies?item_id={aweme_id}&comment_id={comment_id}&cursor={cursor}&count={count}",
+            "/api/douyin/web/fetch_video_comment_replies?item_id={aweme_id}&comment_id={comment_id}&cursor={cursor}&count={count}",
         )
         self.user_posts_path = user_posts_path or os.getenv(
             "DOUYIN_USER_POSTS_PATH",
-            "/api/douyin/web/fetch_user_post_videos?sec_user_id={sec_user_id}&cursor={cursor}&count={count}",
+            "/api/douyin/web/fetch_user_post_videos?sec_user_id={sec_user_id}&max_cursor={cursor}&count={count}",
         )
         self.page_size = page_size
         self.timeout_seconds = timeout_seconds
+        self.request_delay_seconds = request_delay_seconds
+        self.request_count = 0
 
     def resolve_target(self, target: str) -> VideoTarget:
         return VideoTarget(platform=self.platform, aweme_id=_last_path_token(target), source_url=target)
@@ -145,6 +150,8 @@ class DouyinAdapter(PlatformAdapter):
             raise PlatformAccessError(f"http error: {status}", code=str(status))
         payload = json.loads(body or "{}")
         _raise_if_platform_blocked(payload)
+        self.request_count += 1
+        self._throttle()
         return payload
 
     def _headers(self) -> dict[str, str]:
@@ -152,6 +159,14 @@ class DouyinAdapter(PlatformAdapter):
         if self.cookie:
             headers["Cookie"] = self.cookie
         return headers
+
+    def _throttle(self) -> None:
+        min_delay, max_delay = self.request_delay_seconds
+        if max_delay <= 0:
+            return
+        delay = random.uniform(min_delay, max_delay)
+        if delay > 0:
+            time.sleep(delay)
 
 
 def _last_path_token(value: str) -> str:

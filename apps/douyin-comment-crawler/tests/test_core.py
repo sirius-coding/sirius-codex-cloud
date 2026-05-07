@@ -2,12 +2,15 @@ from __future__ import annotations
 
 import csv
 import json
+import threading
+import time
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from douyin_comment_crawler.adapters.base import PlatformAdapter
-from douyin_comment_crawler.crawler import crawl_account, crawl_video
+from douyin_comment_crawler.crawler import crawl_account, crawl_replies_for_job, crawl_video
 from douyin_comment_crawler.exporter import export_job
 from douyin_comment_crawler.models import CommentRecord, RiskProfile, VideoTarget
 from douyin_comment_crawler.storage import JobStore
@@ -51,6 +54,28 @@ class FakeAdapter(PlatformAdapter):
             "created_at": "2026-05-07T10:01:00+08:00",
             "like_count": 1,
         }
+
+
+class ConcurrentFakeAdapter(FakeAdapter):
+    def __init__(self) -> None:
+        self.active = 0
+        self.max_active = 0
+        self.lock = threading.Lock()
+
+    def iter_videos(self, account: str, cursor: str | None = None):
+        for index in range(4):
+            yield VideoTarget(platform=self.platform, aweme_id=f"video-{index}", source_url=f"{account}/video-{index}")
+
+    def iter_comments(self, video: VideoTarget, cursor: str | None = None):
+        with self.lock:
+            self.active += 1
+            self.max_active = max(self.max_active, self.active)
+        try:
+            time.sleep(0.02)
+            yield {"comment_id": f"{video.aweme_id}-c1", "raw_text": "hello"}
+        finally:
+            with self.lock:
+                self.active -= 1
 
 
 class CoreTests(unittest.TestCase):
@@ -145,6 +170,61 @@ class CoreTests(unittest.TestCase):
 
             self.assertEqual(store.get_job(job_id)["status"], "completed")
             self.assertEqual(store.count_comments(job_id), 4)
+
+    def test_core_crawler_does_not_sleep_per_comment(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = JobStore(Path(tmp) / "jobs.db")
+            with patch("time.sleep") as sleep:
+                crawl_video(
+                    store=store,
+                    adapter=FakeAdapter(),
+                    target="video-1",
+                    include_replies=False,
+                    risk=RiskProfile(min_delay_seconds=1, max_delay_seconds=1),
+                )
+
+            sleep.assert_not_called()
+
+    def test_account_crawl_uses_bounded_video_workers_and_records_metrics(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = JobStore(Path(tmp) / "jobs.db")
+            adapter = ConcurrentFakeAdapter()
+            job_id = crawl_account(
+                store=store,
+                adapter=adapter,
+                account="https://example.test/user/demo",
+                include_replies=False,
+                risk=RiskProfile(min_delay_seconds=0, max_delay_seconds=0, workers=4),
+            )
+
+            self.assertGreater(adapter.max_active, 1)
+            metrics = store.get_job_metrics(job_id)
+            self.assertEqual(metrics["videos_seen"], 4)
+            self.assertEqual(metrics["comments_seen"], 4)
+            self.assertEqual(metrics["comments_saved"], 4)
+
+    def test_replies_can_be_crawled_as_second_stage_for_existing_job(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = JobStore(Path(tmp) / "jobs.db")
+            adapter = FakeAdapter()
+            risk = RiskProfile(min_delay_seconds=0, max_delay_seconds=0, workers=2)
+            job_id = crawl_video(
+                store=store,
+                adapter=adapter,
+                target="video-1",
+                include_replies=False,
+                risk=risk,
+            )
+            self.assertEqual(store.count_comments(job_id), 2)
+
+            crawl_replies_for_job(store=store, adapter=adapter, job_id=job_id, risk=risk)
+            crawl_replies_for_job(store=store, adapter=adapter, job_id=job_id, risk=risk)
+
+            self.assertEqual(store.get_job(job_id)["status"], "completed")
+            self.assertEqual(store.count_comments(job_id), 3)
+            metrics = store.get_job_metrics(job_id)
+            self.assertEqual(metrics["replies_seen"], 2)
+            self.assertEqual(metrics["comments_saved"], 3)
 
 
 if __name__ == "__main__":

@@ -73,6 +73,35 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/JobStatus"
+  /jobs/{jobId}/replies:
+    post:
+      summary: Crawl comment replies for an existing job
+      parameters:
+        - $ref: "#/components/parameters/JobId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                pageSize:
+                  type: integer
+                  minimum: 1
+                  default: 20
+                workers:
+                  type: integer
+                  minimum: 1
+                  default: 1
+                riskProfile:
+                  $ref: "#/components/schemas/RiskProfile"
+      responses:
+        "202":
+          description: Reply crawl accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobStatus"
   /jobs/{jobId}/exports:
     post:
       summary: Export job comments
@@ -119,6 +148,14 @@ components:
         includeReplies:
           type: boolean
           default: false
+        pageSize:
+          type: integer
+          minimum: 1
+          default: 20
+        workers:
+          type: integer
+          minimum: 1
+          default: 1
         riskProfile:
           $ref: "#/components/schemas/RiskProfile"
     RiskProfile:
@@ -163,6 +200,16 @@ components:
           type: string
           enum: [running, completed, failed, cooldown]
         comments:
+          type: integer
+        videosSeen:
+          type: integer
+        commentsSeen:
+          type: integer
+        commentsSaved:
+          type: integer
+        repliesSeen:
+          type: integer
+        apiRequests:
           type: integer
         lastError:
           type: string
