@@ -92,6 +92,41 @@ class DouyinAdapterTests(unittest.TestCase):
                 list(adapter.iter_comments(VideoTarget(platform="douyin", aweme_id="v1")))
         self.assertEqual(caught.exception.code, "429")
 
+    def test_timeout_becomes_network_access_error_with_clear_message(self) -> None:
+        adapter = DouyinAdapter(
+            api_base_url="https://api.example.test",
+            comments_path="/comments?aweme_id={aweme_id}",
+            timeout_seconds=7,
+        )
+
+        with patch("douyin_comment_crawler.adapters.douyin.urlopen", side_effect=TimeoutError("timed out")):
+            with self.assertRaises(PlatformAccessError) as caught:
+                list(adapter.iter_comments(VideoTarget(platform="douyin", aweme_id="v1")))
+
+        self.assertEqual(caught.exception.code, "network")
+        self.assertIn("timeout after 7s", str(caught.exception))
+
+    def test_api_wrapper_error_message_becomes_failed_access_error(self) -> None:
+        adapter = DouyinAdapter(
+            api_base_url="https://api.example.test",
+            comments_path="/comments?aweme_id={aweme_id}",
+        )
+        response = FakeResponse(
+            {
+                "code": 500,
+                "router": "/api/douyin/web/fetch_video_comments",
+                "data": None,
+                "message": "无效响应类型。响应类型: <class 'NoneType'>",
+            }
+        )
+
+        with patch("douyin_comment_crawler.adapters.douyin.urlopen", return_value=response):
+            with self.assertRaises(PlatformAccessError) as caught:
+                list(adapter.iter_comments(VideoTarget(platform="douyin", aweme_id="v1")))
+
+        self.assertEqual(caught.exception.code, "api_wrapper")
+        self.assertIn("Download API upstream returned empty/invalid response", str(caught.exception))
+
     def test_http_adapter_throttles_once_per_request_page_and_counts_requests(self) -> None:
         adapter = DouyinAdapter(
             api_base_url="https://api.example.test",

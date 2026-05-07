@@ -23,11 +23,12 @@ def crawl_video(
         _crawl_video_target(store, current_job_id, adapter, video, include_replies, risk)
     except PlatformAccessError as exc:
         store.mark_failed_attempt(current_job_id, f"video:{target}", str(exc))
-        _cool_down(store, current_job_id, risk, exc)
+        _handle_access_error(store, current_job_id, adapter, risk, exc)
     except NotImplementedError as exc:
         store.update_job_status(current_job_id, "failed", str(exc))
     except Exception as exc:  # noqa: BLE001 - job state must capture unexpected adapter failures.
         store.mark_failed_attempt(current_job_id, f"video:{target}", str(exc))
+        _capture_adapter_metrics(store, current_job_id, adapter)
         store.update_job_status(current_job_id, "failed", str(exc))
     else:
         _capture_adapter_metrics(store, current_job_id, adapter)
@@ -65,11 +66,12 @@ def crawl_account(
                 _crawl_video_target(store, current_job_id, adapter, video, include_replies, risk)
     except PlatformAccessError as exc:
         store.mark_failed_attempt(current_job_id, f"account:{account}", str(exc))
-        _cool_down(store, current_job_id, risk, exc)
+        _handle_access_error(store, current_job_id, adapter, risk, exc)
     except NotImplementedError as exc:
         store.update_job_status(current_job_id, "failed", str(exc))
     except Exception as exc:  # noqa: BLE001
         store.mark_failed_attempt(current_job_id, f"account:{account}", str(exc))
+        _capture_adapter_metrics(store, current_job_id, adapter)
         store.update_job_status(current_job_id, "failed", str(exc))
     else:
         _capture_adapter_metrics(store, current_job_id, adapter)
@@ -96,11 +98,12 @@ def crawl_replies_for_job(
                 _crawl_replies(store, job_id, adapter, comment)
     except PlatformAccessError as exc:
         store.mark_failed_attempt(job_id, f"replies:{job_id}", str(exc))
-        _cool_down(store, job_id, risk, exc)
+        _handle_access_error(store, job_id, adapter, risk, exc)
     except NotImplementedError as exc:
         store.update_job_status(job_id, "failed", str(exc))
     except Exception as exc:  # noqa: BLE001
         store.mark_failed_attempt(job_id, f"replies:{job_id}", str(exc))
+        _capture_adapter_metrics(store, job_id, adapter)
         store.update_job_status(job_id, "failed", str(exc))
     else:
         _capture_adapter_metrics(store, job_id, adapter)
@@ -146,6 +149,20 @@ def _cool_down(store: JobStore, job_id: str, risk: RiskProfile, exc: PlatformAcc
     cookie_group = risk.cookie_group or "default"
     store.update_job_status(job_id, "cooldown", str(exc), cooldown_until=deadline)
     store.update_account_health(cookie_group, "cooldown", str(exc), cooldown_until=deadline)
+
+
+def _handle_access_error(
+    store: JobStore,
+    job_id: str,
+    adapter: PlatformAdapter,
+    risk: RiskProfile,
+    exc: PlatformAccessError,
+) -> None:
+    _capture_adapter_metrics(store, job_id, adapter)
+    if exc.code in {"401", "403", "409", "418", "429"}:
+        _cool_down(store, job_id, risk, exc)
+        return
+    store.update_job_status(job_id, "failed", str(exc))
 
 
 def _mark_healthy(store: JobStore, risk: RiskProfile) -> None:

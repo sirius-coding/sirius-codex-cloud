@@ -138,10 +138,16 @@ python3 -m douyin_comment_crawler resume --job-id "<job-id>" --include-replies
 ## 本地脚本
 
 ```bash
+python3 scripts/crawler.py
+bash scripts/crawler.sh
 bash scripts/up.sh
 bash scripts/status.sh
 bash scripts/down.sh
 ```
+
+`crawler.py` 是推荐入口，提供方向键菜单、表格化结果、全局任务状态栏、彩色重点状态、面包屑返回、默认性能参数、实时状态监控、Resume、补采回复和导出快捷操作。
+
+`crawler.sh` 是兼容入口，适合没有可用 TTY 或需要纯 Bash 的环境。
 
 `up.sh` 会创建本地目录并做 CLI smoke check；`down.sh` 不删除数据库和导出文件，只输出说明。
 

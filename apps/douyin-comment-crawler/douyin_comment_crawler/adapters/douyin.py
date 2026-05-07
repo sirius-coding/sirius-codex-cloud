@@ -136,12 +136,18 @@ class DouyinAdapter(PlatformAdapter):
         path = _format_path(path_template, params)
         url = urljoin(f"{self.api_base_url}/", path.lstrip("/"))
         request = Request(url, headers=self._headers(), method="GET")
+        self.request_count += 1
         try:
             with urlopen(request, timeout=self.timeout_seconds) as response:
                 status = getattr(response, "status", 200)
                 body = response.read().decode("utf-8")
         except HTTPError as exc:
             _raise_access_error(exc.code, exc.read().decode("utf-8", errors="replace"))
+        except TimeoutError as exc:
+            raise PlatformAccessError(
+                f"network timeout after {self.timeout_seconds:g}s: {exc}",
+                code="network",
+            ) from exc
         except URLError as exc:
             raise PlatformAccessError(f"network error: {exc.reason}", code="network") from exc
         if status in {401, 403, 409, 418, 429}:
@@ -150,7 +156,6 @@ class DouyinAdapter(PlatformAdapter):
             raise PlatformAccessError(f"http error: {status}", code=str(status))
         payload = json.loads(body or "{}")
         _raise_if_platform_blocked(payload)
-        self.request_count += 1
         self._throttle()
         return payload
 
@@ -212,8 +217,16 @@ def _normalize_comment(item: dict) -> dict:
 
 
 def _raise_if_platform_blocked(payload: dict) -> None:
-    status = str(payload.get("status_code", payload.get("code", "0")))
+    wrapper_code = payload.get("code")
     message = str(payload.get("message", payload.get("msg", "")))
+    if wrapper_code and int(wrapper_code) >= 400:
+        if payload.get("data") is None or "无效响应类型" in message or "NoneType" in message:
+            raise PlatformAccessError(
+                f"Download API upstream returned empty/invalid response: {message}",
+                code="api_wrapper",
+            )
+        raise PlatformAccessError(message or f"Download API error: {wrapper_code}", code=str(wrapper_code))
+    status = str(payload.get("status_code", payload.get("code", "0")))
     lower = message.lower()
     if status in {"401", "403", "429"} or any(word in lower for word in ["captcha", "验证码", "登录", "权限", "频控"]):
         code = "429" if "频控" in message else status

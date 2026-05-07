@@ -7,6 +7,7 @@ from douyin_comment_crawler.adapters import DouyinAdapter
 from douyin_comment_crawler.batch import crawl_batch_file
 from douyin_comment_crawler.config import load_runtime_config
 from douyin_comment_crawler.crawler import crawl_account, crawl_replies_for_job, crawl_video
+from douyin_comment_crawler.doctor import format_doctor_checks, run_doctor
 from douyin_comment_crawler.exporter import export_job
 from douyin_comment_crawler.models import RiskProfile
 from douyin_comment_crawler.storage import JobStore
@@ -113,6 +114,11 @@ def main() -> None:
             job_id = crawl_account(store, adapter, job["target"], args.include_replies, risk, job_id=args.job_id)
         print(f"job_id={job_id}")
         print(f"status={store.get_job(job_id)['status']}")
+        return
+
+    if args.command == "doctor":
+        checks = run_doctor(config, aweme_id=args.aweme_id, timeout_seconds=args.timeout)
+        print(format_doctor_checks(checks))
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -157,6 +163,10 @@ def build_parser() -> argparse.ArgumentParser:
     resume.add_argument("--max-delay", type=float, default=3.0)
     resume.add_argument("--page-size", type=int)
     resume.add_argument("--workers", type=int, default=1)
+
+    doctor = sub.add_parser("doctor", help="诊断 Download API 连通性和评论接口")
+    doctor.add_argument("--aweme-id", default="0", help="用于探测评论接口的作品 ID")
+    doctor.add_argument("--timeout", type=float, default=5)
     return parser
 
 

@@ -36,6 +36,8 @@ DOUYIN_USER_POSTS_PATH=/api/douyin/web/fetch_user_post_videos?sec_user_id={sec_u
 ## 3. 启动检查
 
 ```bash
+python3 scripts/crawler.py
+bash scripts/crawler.sh
 bash scripts/up.sh
 python3 -m douyin_comment_crawler --help
 python3 -m douyin_comment_crawler status
@@ -43,9 +45,43 @@ python3 -m douyin_comment_crawler status
 
 预期：
 
+- `crawler.py` 进入方向键 TUI 操作台
+- `crawler.sh` 进入兼容 Bash 菜单
 - `up.sh` 输出 `douyin-comment-crawler ready`
 - `--help` 能看到 `crawl`、`batch`、`export`、`status`、`resume`
 - 首次 `status` 输出 `暂无任务`
+
+## 3.1 交互操作台
+
+推荐日常使用：
+
+```bash
+python3 scripts/crawler.py
+```
+
+菜单能力：
+
+- 采集单个视频
+- 采集账号作品主评论
+- 为已有任务补采回复
+- 批量文件采集
+- 查看任务状态
+- 实时监控任务
+- 导出任务数据
+- Resume 失败/冷却任务
+- 查看账号组健康状态
+
+交互原则：
+
+- 使用方向键选择，`Enter` 确认。
+- 所有页面统一支持 `b` 或 `Esc` 返回，`q` 退出。
+- 顶部全局显示最近任务或当前任务摘要，例如 `job | status | saved | requests`。
+- 任务状态和命令结果会用表格展示，关键状态和指标用颜色高亮。
+- 必填项才要求输入，例如 `aweme-id`、`sec-user-id`、`job_id`、批量文件路径。
+- 可选性能参数默认使用 `page_size=50`、`workers=4`、`min_delay=0.5`、`max_delay=1.5`。
+- 任务启动后自动捕获 `job_id`，并提供监控、Resume、补采回复和导出快捷入口。
+- 实时监控默认每 5 秒刷新一次，支持 `r` Resume、`p` 补回复、`e` 导出、`b/Esc` 返回。
+- 如果当前环境没有交互式 TTY，可退回 `bash scripts/crawler.sh`。
 
 ## 4. 单视频采集
 
