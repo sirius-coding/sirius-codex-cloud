@@ -1,0 +1,218 @@
+openapi: 3.0.3
+info:
+  title: Douyin Comment Crawler API
+  version: 0.1.0
+  description: Future FastAPI contract for the CLI-first Douyin comment crawler.
+servers:
+  - url: http://localhost:8080
+paths:
+  /health/live:
+    get:
+      summary: Liveness probe
+      responses:
+        "200":
+          description: Service is alive
+  /jobs:
+    post:
+      summary: Create a crawl job
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateJobRequest"
+      responses:
+        "202":
+          description: Job accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobStatus"
+  /jobs/batch:
+    post:
+      summary: Create crawl jobs from multiple targets
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BatchJobRequest"
+      responses:
+        "202":
+          description: Batch jobs accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  jobIds:
+                    type: array
+                    items:
+                      type: string
+  /jobs/{jobId}:
+    get:
+      summary: Get job status
+      parameters:
+        - $ref: "#/components/parameters/JobId"
+      responses:
+        "200":
+          description: Job status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobStatus"
+  /jobs/{jobId}/resume:
+    post:
+      summary: Resume a crawl job from stored cursors
+      parameters:
+        - $ref: "#/components/parameters/JobId"
+      responses:
+        "202":
+          description: Resume accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobStatus"
+  /jobs/{jobId}/exports:
+    post:
+      summary: Export job comments
+      parameters:
+        - $ref: "#/components/parameters/JobId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExportRequest"
+      responses:
+        "200":
+          description: Export file created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExportResult"
+components:
+  parameters:
+    JobId:
+      name: jobId
+      in: path
+      required: true
+      schema:
+        type: string
+  schemas:
+    CreateJobRequest:
+      type: object
+      required:
+        - targetType
+        - platform
+        - target
+      properties:
+        targetType:
+          type: string
+          enum: [video, account]
+        platform:
+          type: string
+          enum: [douyin]
+        target:
+          type: string
+          description: Video URL, aweme_id, account URL, or sec_user_id.
+        includeReplies:
+          type: boolean
+          default: false
+        riskProfile:
+          $ref: "#/components/schemas/RiskProfile"
+    RiskProfile:
+      type: object
+      properties:
+        minDelaySeconds:
+          type: number
+          minimum: 0
+          default: 1
+        maxDelaySeconds:
+          type: number
+          minimum: 0
+          default: 3
+        maxFailures:
+          type: integer
+          minimum: 1
+          default: 3
+        cookieGroup:
+          type: string
+          nullable: true
+        proxyAlias:
+          type: string
+          nullable: true
+          description: Public alias only; real proxy URL belongs in private config.
+    JobStatus:
+      type: object
+      required:
+        - jobId
+        - targetType
+        - platform
+        - status
+        - comments
+      properties:
+        jobId:
+          type: string
+        targetType:
+          type: string
+          enum: [video, account]
+        platform:
+          type: string
+        status:
+          type: string
+          enum: [running, completed, failed, cooldown]
+        comments:
+          type: integer
+        lastError:
+          type: string
+          nullable: true
+        cooldownUntil:
+          type: string
+          nullable: true
+          format: date-time
+    BatchJobRequest:
+      type: object
+      required:
+        - targets
+      properties:
+        targets:
+          type: array
+          items:
+            type: object
+            required:
+              - targetType
+              - target
+            properties:
+              targetType:
+                type: string
+                enum: [video, account]
+              target:
+                type: string
+        includeReplies:
+          type: boolean
+          default: false
+        riskProfile:
+          $ref: "#/components/schemas/RiskProfile"
+    ExportRequest:
+      type: object
+      properties:
+        format:
+          type: string
+          enum: [jsonl, csv]
+          default: jsonl
+        excludeFlags:
+          type: array
+          items:
+            type: string
+            enum: [emoji, mention, reply, empty_text, media_only]
+    ExportResult:
+      type: object
+      required:
+        - path
+        - format
+      properties:
+        path:
+          type: string
+        format:
+          type: string

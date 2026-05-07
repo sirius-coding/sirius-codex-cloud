@@ -1,0 +1,97 @@
+from __future__ import annotations
+
+import json
+import unittest
+from io import BytesIO
+from unittest.mock import patch
+
+from douyin_comment_crawler.adapters.base import PlatformAccessError
+from douyin_comment_crawler.adapters.douyin import DouyinAdapter
+from douyin_comment_crawler.models import CommentRecord, VideoTarget
+
+
+class FakeResponse:
+    def __init__(self, payload: dict, status: int = 200) -> None:
+        self.payload = payload
+        self.status = status
+        self.headers = {"Content-Type": "application/json"}
+
+    def __enter__(self) -> "FakeResponse":
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        return None
+
+    def read(self) -> bytes:
+        return json.dumps(self.payload).encode("utf-8")
+
+
+class DouyinAdapterTests(unittest.TestCase):
+    def test_http_adapter_reads_comments_replies_and_account_videos(self) -> None:
+        adapter = DouyinAdapter(
+            api_base_url="https://api.example.test",
+            comments_path="/comments?aweme_id={aweme_id}&cursor={cursor}&count={count}",
+            replies_path="/replies?comment_id={comment_id}&cursor={cursor}&count={count}",
+            user_posts_path="/posts?sec_user_id={sec_user_id}&cursor={cursor}&count={count}",
+        )
+
+        responses = [
+            FakeResponse(
+                {
+                    "data": {
+                        "comments": [
+                            {
+                                "cid": "c1",
+                                "text": "你好 @demo😀",
+                                "user": {"uid": "u1", "nickname": "测试用户"},
+                                "create_time": 1778128800,
+                                "digg_count": 7,
+                                "ip_label": "广东",
+                            }
+                        ],
+                        "cursor": "20",
+                        "has_more": False,
+                    }
+                }
+            ),
+            FakeResponse({"data": {"comments": [{"cid": "r1", "text": "收到", "user": {"uid": "u2"}}], "has_more": False}}),
+            FakeResponse(
+                {
+                    "data": {
+                        "aweme_list": [
+                            {"aweme_id": "v1", "share_url": "https://example.test/v1", "author": {"sec_uid": "sec"}}
+                        ],
+                        "has_more": False,
+                    }
+                }
+            ),
+        ]
+        with patch("douyin_comment_crawler.adapters.douyin.urlopen", side_effect=responses):
+            comments = list(adapter.iter_comments(VideoTarget(platform="douyin", aweme_id="v1")))
+            self.assertEqual(comments[0]["comment_id"], "c1")
+            self.assertEqual(comments[0]["raw_text"], "你好 @demo😀")
+            self.assertEqual(comments[0]["ip_region"], "广东")
+
+            record = CommentRecord.from_adapter("douyin", "v1", comments[0])
+            replies = list(adapter.iter_replies(record))
+            self.assertEqual(replies[0]["parent_comment_id"], "c1")
+            self.assertEqual(replies[0]["comment_id"], "r1")
+
+            videos = list(adapter.iter_videos("sec"))
+            self.assertEqual(videos[0].aweme_id, "v1")
+            self.assertEqual(videos[0].author_id, "sec")
+
+    def test_http_429_becomes_cooldown_access_error(self) -> None:
+        adapter = DouyinAdapter(
+            api_base_url="https://api.example.test",
+            comments_path="/rate-limit",
+        )
+
+        with patch("douyin_comment_crawler.adapters.douyin.urlopen", return_value=FakeResponse({"message": "too many requests"}, status=429)):
+            with self.assertRaises(PlatformAccessError) as caught:
+                list(adapter.iter_comments(VideoTarget(platform="douyin", aweme_id="v1")))
+        self.assertEqual(caught.exception.code, "429")
+
+
+if __name__ == "__main__":
+    unittest.main()

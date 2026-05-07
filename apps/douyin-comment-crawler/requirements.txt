@@ -1,0 +1,2 @@
+# Core CLI uses Python standard library only.
+# Add private adapter dependencies in a local overlay, not in public templates.
